@@ -81,29 +81,45 @@ HTACCESS_BODY = """\
 Header set Referrer-Policy "no-referrer"
 </IfModule>
 
-# Send pages uncompressed, so the Wayback Machine stores whole ones.
+# Work around a Wayback replay bug: send pages uncompressed.
 #
-# Every capture of this site was arriving truncated -- not slightly, but to
-# roughly a sixth of the page, cut off mid-tag with no closing </html>. The
-# archived byte count was not merely close to the gzipped size, it equalled
-# it exactly, on every page measured (2026-08-24: home 7487/43658,
-# /illuminated-books/ 6628/34734, /blogroll/ 20318/55856, /follow/
-# 24342/111821 -- archived/identity, with gzipped == archived in all four).
-# Something on the capture side reads the *decompressed* body while counting
-# against Content-Length, which mod_deflate sets to the *compressed* length
-# whenever it can buffer the whole response. Both halves are legal HTTP; the
-# combination loses the document.
+# This is a workaround for a defect on the archive's side, not good practice
+# in itself. Serving gzip is correct and near-universal, and the day the bug
+# is fixed this block should come back out. Keep it framed that way -- the
+# temptation when captures look wrong is to start deforming the site (inline
+# the CSS, drop external assets), and that trades a real site for a slightly
+# better archived one.
 #
-# The damage runs past the missing bytes. A truncated page ends before most
-# of its markup, so the crawler's own embed discovery walks a stub and finds
-# almost nothing -- which is why captures come back embeds=0 and replay
-# without stylesheet or images, and why moss's inline low-res placeholders
-# render at their full width/height attributes as giant blurred boxes.
+# Every replay of this site came back truncated -- to roughly a sixth of the
+# page, cut off mid-tag with no closing </html>. The replayed byte count was
+# not merely close to the gzipped size, it equalled it exactly, on every page
+# measured (2026-08-24: home 7487/43658, /illuminated-books/ 6628/34734,
+# /blogroll/ 20318/55856, /follow/ 24342/111821 -- replayed/identity, with
+# gzipped == replayed in all four). Replay serves the *decompressed* body
+# while still advertising the origin's *compressed* Content-Length, and cuts
+# to it. The stored record itself looks intact: its CDX length, ~7908 for the
+# home page, is the whole 7487-byte gzipped body plus headers.
+#
+# What this is NOT is a general "Wayback cannot do gzip" claim -- that was
+# the first read here and it is wrong. www.debian.org serves exactly the same
+# combination, gzip with an explicit Content-Length, and replays whole (18713
+# bytes, closing </html>, six stylesheet links intact). Most of the web is
+# fine. Something narrower is at work, and from outside the archive there is
+# no way to tell what; the onion capture path is the obvious suspect and the
+# only real fix is IA's. See also the `wayback` Python client, which carries
+# its own workaround for Wayback mangling Content-Encoding on mementos.
+#
+# The damage runs past the missing bytes. A page cut off before most of its
+# markup replays with almost nothing in it, so the stylesheet never loads and
+# moss's inline low-res placeholders render at their full width/height
+# attributes as giant blurred boxes.
 #
 # Proven by controlled experiment, not inference: with `SetEnv no-gzip 1` on
-# a single path, /writings/the-mental-traveller/ captured at 13537 bytes --
+# a single path, /writings/the-mental-traveller/ replayed at 13537 bytes --
 # its exact identity length, closing </html> -- while the rest of the site,
-# still gzipped, went on truncating. Reverted immediately after.
+# still gzipped, went on truncating. Reverted immediately after. The sitewide
+# form then took the home page from 7487 bytes and 2 of 19 images to 55355
+# bytes with all 19.
 #
 # So pages go out uncompressed and static assets keep their gzip. The cost
 # is small and lands where there is room for it: a page is a few tens of KB
@@ -122,6 +138,12 @@ Header set Referrer-Policy "no-referrer"
 # The feed is in the list on purpose. It is not an asset the archive picks
 # up in passing: the sweep submits /rss.xml by name, and 17 copies of it
 # are already stored, every one cut to its gzipped length like the pages.
+#
+# Leaving the assets gzipped costs nothing today, because none of them reach
+# the archive at all. Same onion, same window, two 29-byte files with
+# identical bytes: the one served as text/html captured, the one served as
+# text/css came back "unreachable". Non-HTML over the onion is a second,
+# separate defect, and no server-side setting here reaches it.
 <IfModule mod_setenvif.c>
 SetEnvIf Request_URI "(/|\\.html?|\\.xml|\\.php)$" no-gzip=1
 </IfModule>
