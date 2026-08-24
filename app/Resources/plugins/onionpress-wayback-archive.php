@@ -649,6 +649,46 @@ function onionpress_wayback_poll_parallel( array $job_ids, &$covered = null ) {
 
 // ───────────────── finalize: write outcomes into storage ────────────
 
+// Investigated 2026-08-24: submitting each image/CSS/JS URL to SPN as
+// its own job did not work that day, so no per-asset submission path
+// ships here — but read the whole note before treating that as settled.
+//
+// The controlled experiment (same window, minutes apart, our Tor client
+// verified healthy by a third-party onion fetch first):
+//   - our onion's HOME PAGE as an SPN job  -> status:success in 10.3s,
+//     http_status:200, and counters.embeds=0 / resources=[]. SPN's
+//     crawler reaches this onion and captures HTML; it fetched no
+//     embedded resources even from a successful page capture.
+//   - our onion's CSS FILE as its own job, submitted in BOTH the
+//     http:// and https:// URL forms -> error:no-captures for each,
+//     "...unreachable" — which the successful page capture in the same
+//     minutes proves is factually wrong as a reachability claim.
+//   - earlier the same day: a favicon and a PNG on DuckDuckGo's onion
+//     (fast, well-provisioned, unrelated to us), with force_get=1 and
+//     without -> error:no-captures as well.
+// So on 2026-08-24, SPN captured onion HTML pages while failing every
+// standalone non-HTML onion URL, across two sites and both URL schemes.
+//
+// What this does NOT establish — and this file previously overclaimed
+// it, in exactly the way that was already made and retracted on
+// 2026-08-13 ("archive.org's onion is unreachable" -> our own Tor was
+// degraded; "no onion captures since June, SPN regressed" -> nobody had
+// submitted any; one live submission then succeeded in 6.6s):
+//   - "cannot, for anyone, permanently". SPN's /save/status flips
+//     success -> error:no-captures for a job whose capture actually
+//     landed (that is why the CDX-rescue path in this file exists), IA
+//     serves "Temporarily Offline" pages mid-outage, and CDX absence
+//     only ever proves absence of submissions. A failure report from
+//     any of these channels is weather until CDX, checked later, says
+//     otherwise.
+// Before acting on this note in either direction, re-run the experiment
+// above — page control first, then assets, then CDX a while later. Do
+// not write "SPN cannot" anywhere (comments, commits, issues) from
+// error responses alone.
+//
+// Until a re-run shows asset jobs landing: resources_state below is the
+// remedy we can ship — stop calling embed-less captures successful.
+
 /**
  * Compare two URLs the way SPN's resource list needs them compared:
  * ignoring scheme and a trailing slash, which SPN varies freely between
