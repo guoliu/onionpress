@@ -2,7 +2,7 @@
 
 > Status: reserve draft. Open only after engagement in the umbrella issue.
 
-**Title: RFC: a clearnet domain alongside the `.onion` for published sites**
+**Title: Proposal: a clearnet domain alongside the `.onion` for published sites**
 
 onionpress.org itself lives a dual life: a normal DNS domain for everyone, and an onion address for people who need it. Sites published *through* OnionPress currently only get the second half. For most authors the `.onion` is the resilient mirror, not the front door — they still need a `example.com` their readers can reach. In moss, a user can already purchase and set up a domain in a few clicks; the gap is a blessed story for how that domain and the OnionPress machine relate.
 

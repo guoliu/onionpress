@@ -2,7 +2,7 @@
 
 > Status: reserve draft. Open only after engagement in the umbrella issue.
 
-**Title: RFC: an archive fallback that works where web.archive.org is blocked**
+**Title: Proposal: an archive fallback that works where web.archive.org is blocked**
 
 OnionPress's Wayback integration gives every published site a preservation copy and a fallback URL. But in the places that need censorship-resilient publishing most — behind the GFW in particular — web.archive.org itself is blocked, so the fallback fails exactly when and where the primary does. I publish from behind the GFW: the *onion* path now works there (bridges/PT/proxy, in the tor PR), but the archive fallback link we hand out is unreachable for a reader on the same network unless they are already on Tor.
 
