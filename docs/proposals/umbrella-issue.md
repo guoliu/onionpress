@@ -7,13 +7,13 @@
 
 ---
 
-**Title: Static-site publishing for OnionPress — working demo + PR series**
+**Title: Static-site publishing for OnionPress**
 
 *(recording 1 embedded here: editing a page in moss and republishing — the live `.onion` updates in one click)*
 
 OnionPress can now work with [moss](https://github.com/Symbiosis-Lab/moss-releases) via the [OnionPress plugin](https://github.com/Symbiosis-Lab/moss-registry/tree/main/plugins/onionpress). This allows a user to right-click on a folder of markdown files and media assets, preview the website generated, then publish it to the Tor network, with all the controls and powers that OnionPress offers.
 
-To make it work, I added fixes and features to an OnionPress fork, which I believe are aligned with OnionPress's design, so I'm offering them back in the PRs below. Other than bug fixes, these PRs add two things:
+To make it work, I added fixes and features to an OnionPress fork, which I believe are aligned with OnionPress's design, so I'm offering them back in the PRs below. Other than bug fixes, these PRs add two features:
 
 - **Static-site generators become publishers.** The receiver is a small documented HTTP protocol (status, upload, atomic commit) so any SSG can drive OnionPress as a publish target. moss is the first client, but nothing in the protocol is moss-specific. WordPress stays exactly what it is.
 - **OnionPress works with the user's proxy now, making it usable behind the GFW and similar firewalls.** Tor can route through the proxy the user is already running, and the stack ships bridge and pluggable-transport support (obfs4, Snowflake) for both C Tor and Arti.
@@ -41,8 +41,8 @@ Each is reviewable alone; nothing later is required to accept something earlier.
 
 These are improvements that will make it much more usable to a broader set of users, but too big to propose at this stage. I'd love to talk more on these if they sound aligned.
 
-- **A DNS domain alongside the onion name and onion address**: sites published through OnionPress get a `.onion`; most authors also need a `example.com` their readers can reach, just like the dual life onionpress.org itself has. In moss, a user can purchase and set up a domain in a few clicks. The archive fallback could serve that domain too: archiving under the clearnet URL also sidesteps the current gaps in Save Page Now's `.onion` capture path (see the note below), and the domain's edge can redirect to the newest snapshot when the home machine is offline — the same role the takeover already plays for the onion, applied at the DNS layer.
-- **WordPress as an optional component**: a publisher that already runs its own local server (moss serves the site it previews) needs only the tor container — the static server and receiver matter when the site should keep serving after the publisher app quits, or live on another machine. Making WordPress optional would cut most of the container download (WordPress 257 MB + MariaDB 100 MB compressed, vs 86 MB for the tor image) and most of the 2 GB VM it is sized for, while keeping today's full stack the default.
+- **A DNS domain alongside the onion name and onion address**: sites published through OnionPress get a `.onion`; most authors also need a `example.com` their readers can reach, just like the dual life onionpress.org itself has. In moss, a user can purchase and set up a domain in a few clicks. The archive fallback could serve that domain too: archiving under the clearnet URL also sidesteps the current gaps in Save Page Now's `.onion` capture path (see the note below), and the domain's edge can redirect to the newest snapshot when the home machine is offline: the same role the takeover already plays for the onion, applied at the DNS layer.
+- **WordPress as an optional component**: moss serves the site it previews, and most SSGs have their own preview server, in these cases only the tor container is needed. Making WordPress optional would cut most of the container download (WordPress 257 MB + MariaDB 100 MB compressed, vs 86 MB for the tor image) and most of the 2 GB VM it is sized for, while keeping today's full stack the default.
 
 ## One issue with Save Page Now found in the process
 
