@@ -121,6 +121,20 @@ Header set Referrer-Policy "no-referrer"
 # form then took the home page from 7487 bytes and 2 of 19 images to 55355
 # bytes with all 19.
 #
+# Confirmed end-to-end in the archive, not just on the wire, on 2026-08-24:
+# a post-fix capture (ts 20260824101350) replays at 43658 bytes -- byte-for-
+# byte what the server sends -- with all 19 <img>, the stylesheet <link>, and
+# a closing </html>. Pre-fix captures of the same page (e.g. ts 20260824072704)
+# still replay truncated at 7487 with 2 of 19, so old records do NOT heal; the
+# page has to be re-captured after the fix to benefit.
+#
+# Two traps when checking this. (1) CDX `length` is the COMPRESSED WARC record
+# size, not the page size -- the good 43658-byte capture indexes as length 7891,
+# which looks identical to the broken 7487-byte era and is not. Replay it before
+# concluding anything. (2) CDX `statuscode` reads 204 on these records while the
+# replay serves a full 200 body, so a 204 there is not an empty capture either.
+# Both misled a session into reporting a regression that had not happened.
+#
 # So pages go out uncompressed and static assets keep their gzip. The cost
 # is small and lands where there is room for it: a page is a few tens of KB
 # next to the hundreds of KB of imagery beside it, while CSS and JS -- the
