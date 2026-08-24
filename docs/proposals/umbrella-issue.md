@@ -57,10 +57,22 @@ The cause is not that Tor is slow or unreachable. **Over `.onion`, SPN fetches t
 | duckduckgo.com | 158 | 63 |
 | DuckDuckGo's `.onion` | **0** | **0** |
 
-It is not specific to our site or our generator — DuckDuckGo's own onion behaves identically. Our server's access log shows why we think it is discovery rather than reachability: the capture arrives as a single request with a Chrome user-agent, gets a normal `200`, and is never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts. Whether that user-agent is a real browser whose subresource fetches fail, or a plain fetcher, we cannot tell from outside.
+It is not specific to our site or our generator — DuckDuckGo's own onion behaves identically. Since we run the server being captured, we can add two things from our own access log that may narrow it down.
 
-It also looks like a regression rather than a limitation: non-HTML captures on DuckDuckGo's onion and on archive.org's own onion ran at full volume through June 2026, stopped entirely in July, and have been zero since. Provenance on the earlier ones reads `spn2-…` in the `x-archive-src` header, so SPN did capture onion assets until recently.
+First, each capture arrives as a **single** request with a Chrome user-agent, gets a normal `200`, and is never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts. So it looks like discovery rather than reachability — the document comes through fine.
 
-There is a second, smaller thing that blocks the obvious workaround. Submitting assets one at a time does work over `.onion` — but only if the URL has no file extension. `/feed/` (serving `application/rss+xml`) captures and replays with its correct content type; the same site's `.css` and `.jpg` URLs return `error:no-captures` without SPN ever connecting to our server. So the refusal reads the URL string, not the response.
+Second, the documented behaviour is that "SPN2 does a HTTP HEAD on the target URL to decide whether to use a headless browser or a simple HTTP GET request". **We never see that HEAD.** Across eight captures of eight distinct URLs, our log holds eight `GET`s and zero `HEAD`s from SPN (the only HEADs present are our own `curl` probes). If the decision step is being skipped over `.onion` and the plain-GET path taken unconditionally, that would explain the zero embeds, the zero outlinks and the single request together. We cannot see your side, so we offer that as a hypothesis rather than a diagnosis.
+
+It also looks like a regression rather than a limitation, and it is not just us. Non-HTML captures per month in 2026, from CDX, on three onions none of which are ours:
+
+| onion | Feb | Mar | Apr | May | Jun | Jul | Aug |
+|---|---|---|---|---|---|---|---|
+| DuckDuckGo | 83 | 83 | 420 | 172 | 332 | — | **0** |
+| archive.org's own | 337 | 50 | 842 | 361 | 124 | — | **0** |
+| Facebook | 86 | 28 | 156 | 19 | 43 | — | **0** |
+
+All three carried assets at volume through June, have **no captures at all** in July, and since August capture HTML only (4, 1 and 3 documents respectively, zero non-HTML). Provenance on the pre-July ones reads `spn2-…` in the `x-archive-src` header, so these were Save Page Now's own captures, not another crawler's. Something appears to have changed in the onion path at the end of June.
+
+There is a second thing, which blocks the obvious workaround. Submitting an asset directly, one URL at a time, is a supported mode — `https://www.debian.org/debhome.css` and a `.png` beside it both captured fine when we tried them. Over `.onion` the same submissions return `error:no-captures` without SPN ever connecting to our server. The discriminator appears to be the file extension rather than the response: our `/feed/`, which serves `application/rss+xml` from an extensionless URL, captures and replays with its correct content type, while `.css` and `.jpg` on the same host are refused unread.
 
 Neither is urgent for us — we can route the fallback through a clearnet domain, and that is a better answer anyway. But onion capture visibly worked two months ago, so we thought it was worth reporting.
