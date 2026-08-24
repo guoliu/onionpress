@@ -519,46 +519,51 @@ function onionpress_wayback_submit_parallel( array $urls ) {
     // What we do instead is refuse to call such a capture complete: see
     // onionpress_wayback_resources_state() and the bare-captures counter.
     //
-    // Do NOT "fix" this by submitting the assets as their own URLs. That
-    // was measured on 2026-08-24 and it does not work over .onion — for
-    // anyone, not just us. Submitting four URLs in one window gave:
+    // Do NOT "fix" this by submitting the assets as their own URLs, and do
+    // NOT reach for force_get=1 to do it. Both were measured 2026-08-24 and
+    // both fail. SPN gates non-document URLs over .onion on the URL's
+    // EXTENSION, before it opens a connection: .html/.xhtml/.rss/.atom and
+    // extensionless paths capture, while .css/.xml/.png/.js/.json/.txt come
+    // back error:no-captures ("unreachable") having never touched us — 27
+    // submissions produced exactly 8 requests in our access log, matching
+    // the 8 successes 1:1. It is the extension and not the Content-Type: a
+    // .html URL served as text/css captured, and .css/.png URLs served as
+    // text/html were refused. force_get=1, the documented flag for non-HTML
+    // targets, does not bypass it (CSS and JPEG both still no-captures,
+    // no-flag control identical).
     //
-    //     our  HTML  -> error:gateway-timeout
-    //     our  CSS   -> error:no-captures ("unreachable")
-    //     DDG  HTML  -> SUCCESS in 20s (ts 20260824095713)
-    //     DDG  CSS   -> error:no-captures ("unreachable")
+    // This is also why /feed/ has 17 stored records and /rss.xml has none:
+    // same RSS bytes, but one is an extensionless directory URL and the
+    // other ends in .xml and is refused unread.
     //
-    // DuckDuckGo's onion is fast, healthy, and its HTML captured on the
-    // spot in that same window, so this is not Tor congestion and not a
-    // slow origin — and it is not something about our server, which was
-    // the standing suspicion. A directly-submitted non-HTML URL over
-    // .onion fails, full stop. It is not the file either: 29-byte
-    // byte-identical files on our own onion capture as .html and fail as
-    // .css, so the discriminator is the extension/Content-Type, not size
-    // or reachability.
+    // Two earlier versions of this comment were wrong here and are worth
+    // naming so the mistakes are not reinstated. They said the onion
+    // CSS/JS already in Wayback "did not come through Save Page Now" and
+    // that provenance "can't be read off the index". Provenance CAN be
+    // read: the x-archive-src header on the id_ replay endpoint carries
+    // the WARC name even though CDX redacts `filename` — ours reads
+    // spn2-20260824074929-wwwb-spn22.us.archive.org-8002.warc.gz. Those
+    // other captures were SPN2's own. And embed capture over .onion is a
+    // dated REGRESSION, not a standing limitation: it worked to ~2026-06-24,
+    // vanished for all of July, and came back HTML-only in August. Full
+    // month-by-month evidence in CLAUDE.md — read it before theorising here.
     //
-    // The Wayback Machine does hold onion CSS/JS — DDG's onion has 82
-    // text/css and 230 x-javascript records, IA's own onion 225 JS, dated
-    // 202602-202606. Those did not come through Save Page Now; CDX
-    // redacts the WARC `filename` field, so the pipeline can't be read
-    // off the index, but whatever captured them is not the API we have.
-    // Treat bare captures over onion as SPN's steady state, not as a
-    // defect of this site to be chased.
+    // Net effect while both defects stand: over .onion the Wayback Machine
+    // holds our HTML and nothing else. Pages replay whole (see the no-gzip
+    // work in multisite.py) but unstyled, because the stylesheet they
+    // reference was never captured. No parameter, retry, or resubmission
+    // strategy on our side changes that — the paired test settled it with
+    // the same moss build on both transports and a byte-identical
+    // stylesheet at an identical path: clearnet 22 and 15 resources on two
+    // pages against onion 0 and 0, leaf assets clearnet 3/3 vs onion 0/5.
+    // Belongs in the report to IA — and OnionPress is IA's own project, so
+    // that report has somewhere to go.
     //
-    // (An earlier version of this comment said it was "not established"
-    // whether page-embed capture fails for the same reason. It is now:
-    // resources=0 over onion vs 24 over clearnet, above. Direct submission
-    // and embed capture fail together, and they fail for everyone.)
-    //
-    // Net effect on this site: over .onion the Wayback Machine can only
-    // ever hold our HTML. Confirmed against the index — 138 text/html and
-    // 17 rss+xml records for our onion, and zero of anything else. Pages
-    // replay whole (see the no-gzip work in multisite.py) but unstyled,
-    // because the stylesheet they reference was never captured. No
-    // parameter, retry, or resubmission strategy on our side changes
-    // that; only a different capture pipeline would. Belongs in the
-    // report to IA — and OnionPress is IA's own project, so that report
-    // has somewhere to go.
+    // One thing here IS ours, though: the sweep's own submit list contains
+    // zero non-document-extension URLs, so "our assets never captured" is
+    // partly "we almost never asked". That does not change the outcome
+    // while Defect B stands, but do not cite the empty index as proof of
+    // refusal without checking what was actually submitted.
     //
     // Dropped `if_not_archived_within=1h` — on retries after a failed
     // onion crawl, SPN was returning the cached error instead of re-
