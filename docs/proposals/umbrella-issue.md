@@ -48,35 +48,8 @@ These are improvements that will make it much more usable to a broader set of us
 
 An OnionPress site that goes offline falls back to its Wayback snapshot, so how well Save Page Now captures a `.onion` decides what readers actually see. Right now they see the page unstyled: the HTML is archived, and none of the CSS or images are.
 
-The cause is not that Tor is slow or unreachable. **Over `.onion`, SPN fetches the document and then discovers nothing inside it** — `counters.embeds` and `counters.outlinks` both come back `0`, while `http_status` is `200` and the capture finishes in 7–10s. Measured 2026-08-24 with one script, one set of credentials, identical parameters, varying only the target:
+Over `.onion`, SPN fetches the document and discovers nothing inside it — `embeds` and `outlinks` both come back `0` where the same site on clearnet gives 24 and 29, submitted by the same script with the same parameters in the same minute. It is not our site: DuckDuckGo's onion behaves identically, and non-HTML capture on three well-known onions stopped in the same month. Our best reading is that the headless browser is not running for onion targets.
 
-| target | embeds | outlinks |
-|---|---|---|
-| our site, clearnet | 24 | 29 |
-| our site, `.onion` | **0** | **0** |
-| duckduckgo.com | 158 | 63 |
-| DuckDuckGo's `.onion` | **0** | **0** |
+Filed separately as #__ so this issue does not have to carry it — that one has the isolation, the month-by-month CDX figures, and reproduction steps.
 
-It is not specific to our site or our generator — DuckDuckGo's own onion behaves identically. Since we run the server being captured, we can add two things from our own access log that may narrow it down.
-
-First, each capture arrives as a **single** request with a Chrome user-agent, gets a normal `200`, and is never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts. So it looks like discovery rather than reachability — the document comes through fine.
-
-Second, the documented behaviour is that "SPN2 does a HTTP HEAD on the target URL to decide whether to use a headless browser or a simple HTTP GET request". **We never see that HEAD.** Across eight captures of eight distinct URLs, our log holds eight `GET`s and zero `HEAD`s from SPN (the only HEADs present are our own `curl` probes).
-
-That points at one cause for all of it: over `.onion` the headless browser never runs. A third test agrees. Asking for `capture_screenshot=1` on a **successful** onion capture returns no `screenshot` field at all, while the same parameter on `www.debian.org` returns one, together with its 24 embeds and 29 outlinks. A screenshot requires something to render the page, so its absence on a success — not a timeout — says nothing rendered. Embeds and outlinks are both browser-derived, which is why they are zero; and the HEAD is only worth doing if there is a choice to be made.
-
-Worth noting for anyone reproducing this: roughly a quarter of our onion submissions come back `error:gateway-timeout`, and the first run of that screenshot test failed that way in **both** arms, which briefly looked like a browser-related error and was not. Any single onion result here needs a retry before it means anything.
-
-It also looks like a regression rather than a limitation, and it is not just us. Non-HTML captures per month in 2026, from CDX, on three onions none of which are ours:
-
-| onion | Feb | Mar | Apr | May | Jun | Jul | Aug |
-|---|---|---|---|---|---|---|---|
-| DuckDuckGo | 83 | 83 | 420 | 172 | 332 | — | **0** |
-| archive.org's own | 337 | 50 | 842 | 361 | 124 | — | **0** |
-| Facebook | 86 | 28 | 156 | 19 | 43 | — | **0** |
-
-All three carried assets at volume through June, have **no captures at all** in July, and since August capture HTML only (4, 1 and 3 documents respectively, zero non-HTML). Provenance on the pre-July ones reads `spn2-…` in the `x-archive-src` header, so these were Save Page Now's own captures, not another crawler's. Something appears to have changed in the onion path at the end of June.
-
-There is a second thing, which blocks the obvious workaround. Submitting an asset directly, one URL at a time, is a supported mode — `https://www.debian.org/debhome.css` and a `.png` beside it both captured fine when we tried them. Over `.onion` the same submissions return `error:no-captures` without SPN ever connecting to our server. The discriminator appears to be the file extension rather than the response: our `/feed/`, which serves `application/rss+xml` from an extensionless URL, captures and replays with its correct content type, while `.css` and `.jpg` on the same host are refused unread.
-
-Neither is urgent for us — we can route the fallback through a clearnet domain, and that is a better answer anyway. But onion capture visibly worked two months ago, so we thought it was worth reporting.
+It is not urgent for us: we can route the fallback through a clearnet domain, and that is a better answer anyway. But onion capture visibly worked two months ago, so it seemed worth reporting.
