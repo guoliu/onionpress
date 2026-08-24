@@ -16,42 +16,26 @@
 
 **Title: Static-site publishing for OnionPress — working demo + PR series**
 
-*(recording 1 embedded here: editing a page in moss and republishing —
-the live `.onion` updates in one click)*
+*(recording 1 embedded here: editing a page in moss and republishing — the live `.onion` updates in one click)*
 
-The video is [moss](https://mosspub.com) — a static-site publishing app —
-updating a site that is served from a live `.onion` through OnionPress.
-Everything it uses is offered back in the PRs below — we kept nothing
-needed to reproduce it.
+OnionPress can now work with [moss](https://github.com/Symbiosis-Lab/moss-releases) via the [OnionPress plugin](https://github.com/Symbiosis-Lab/moss-registry/tree/main/plugins/onionpress). This allow an user to right click on a folder of markdown files and media assets, preview the website generated, then publish it to Tor network, with all the controls and powers that OnionPress offers.
 
-Two things these PRs add to OnionPress:
+To make it work, I added fixes and features to a OnionPress fork, which I believe are aligned with OnionPress's design. Therefore I offered these edits back in the PRs below. Other than bug fixes, these PRs add two things:
 
-- **Static-site generators become publishers.** The receiver is a small
-  documented HTTP protocol — status, upload, atomic commit — so any SSG
-  can drive OnionPress as a publish target. moss is the first client;
-  nothing in the protocol is moss-specific, and WordPress stays exactly
-  what it is.
-- **OnionPress works from behind the GFW.** Tor can route through the
-  proxy the user is already running, and the stack ships bridge and
-  pluggable-transport support (obfs4, Snowflake) for both C Tor and Arti.
+- **Static-site generators become publishers.** The receiver is a small documented HTTP protocol (status, upload, atomic commit) so any SSG can drive OnionPress as a publish target. moss is the first client; but the protocol is compatible with any SSGs instead of moss-specific. WordPress stays exactly what it is.
+- **OnionPress works with proxy now, making is usable behind GFW etc.** Tor can route through the proxy the user is already running, and the stack ships bridge and pluggable-transport support (obfs4, Snowflake) for both C Tor and Arti.
 
-*(recording 2 embedded lower down: a first publish from moss — the
-onion-name step claims a memorable name, then the site comes up at
-`<name>.onion`)*
+*(recording 2 embedded lower down: a first publish from moss — the onion-name step claims a memorable name, then the site comes up at `<name>.onion`)*
 
-## Try it yourself (~5 minutes)
+## Try it out
 
-1. Install OnionPress from our fork's release (or run your own build with
-   the PRs applied) and start it.
-2. `./test-receiver.sh` — publishes a fixture site over the loopback
-   receiver and verifies it is served at the site root ahead of WordPress.
-3. The wire protocol any SSG can implement: `docs/static-publish-protocol.md`.
+1. Install [moss](https://github.com/Symbiosis-Lab/moss-releases/releases/latest/download/moss.dmg), and enable preview features in setting.
+2. Right click on a folder with md files (such one made with Obsidian), or launch moss and create one.
+3. In deploy setting tab, click "+", install OnionPress plugin. After it finishes installing, click publish.
 
-## The PRs (suggested review order)
+## The PRs
 
-Each is reviewable alone; nothing later is required to accept something
-earlier. PR 4's branch includes 2 and 3 underneath (its feature builds on
-both); its own commits are the last nine.
+Each is reviewable alone; nothing later is required to accept something earlier. PR 4's branch includes 2 and 3 underneath (its feature builds on both); its own commits are the last nine.
 
 | PR | What | Size |
 |---|---|---|
@@ -60,32 +44,9 @@ both); its own commits are the last nine.
 | #__ | Static-first serving: Apache rules that serve a published static site ahead of WordPress, runtime-injected and self-repairing; pages served uncompressed so Wayback captures are whole | S |
 | #__ | The static-publish receiver: loopback REST endpoints (status / upload / atomic commit), hardened tar extractor, headless `onionname` CLI, `--managed` unattended installs, Wayback coverage of the static site's real pages | M |
 
-A design note on all of it: where OnionPress already had a mechanism —
-Save Page Now archiving, the onion-service lifecycle, provisioning — we
-extended that mechanism rather than building a parallel one.
+## To make it more usable
 
-## What we deliberately did NOT send
-
-Our fork also carries a repointed self-updater, a fork-built tor image
-(superseded by the one-line Dockerfile change in the bridges PR — you'd
-rebuild and repin your own image), and fork CI. None of it is in these PRs.
-Two pre-existing pins worth knowing: `containers.py` and `launcher_ops.py`
-pin an older tor digest than docker-compose, so bridges won't reach the
-takeover-worker path until all three move together (flagged in the bridges
-PR).
-
-## Where we'd like to go together
-
-Three directions we'd love your read on — happy to open any of these as its
-own issue if it interests you:
-
-- **A DNS domain alongside the onion name and onion address**: sites
-  published through OnionPress get a `.onion`; most authors also need a
-  `example.com` their readers can reach — the dual life onionpress.org
-  itself has.
-- **WordPress as an optional component**: a publisher that brings its own
-  static site needs only tor + receiver + Apache. Making WordPress
-  optional would shrink the download and the idle footprint for that path,
-  while keeping today's full stack the default.
-- **Wayback behind the GFW**: making the archive fallback usable where
-  web.archive.org itself is blocked.
+These are improvements that will make it much more usable to a broader user, but too big to propose at this stage. I'd love to talk more on these if they sounds aligned.
+- **A DNS domain alongside the onion name and onion address**: sites published through OnionPress get a `.onion`; most authors also need a `example.com` their readers can reach, just like the dual life onionpress.org itself has. In moss, user can purchase and setup a domain with a few clicks; if we can find a way for Internet Archive fallback to serve that custom domain (Claude: how?), it becomes much more useful.
+- **WordPress as an optional component**: a publisher that brings its own static site needs only tor + receiver + Apache (Claude: not even receiver + Apache right? We can just serve static file locally). Making WordPress optional would shrink the download and the idle footprint for that path (Claude: by how much?), while keeping today's full stack the default.
+- **Wayback behind the GFW**: making the archive fallback usable where web.archive.org itself is blocked (Claude: how? what issue do we have?).
