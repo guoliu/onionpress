@@ -39,12 +39,19 @@ Prerequisites (skips the suite if any fails):
 """
 
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 import time
 import unittest
 
 _WP = "onionpress-wordpress"
+
+_PLUGIN = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "app", "Resources", "plugins", "onionpress-wayback-archive.php",
+)
 
 
 def _docker_exec(args, **kwargs):
@@ -86,6 +93,41 @@ def _eval(php, url):
     """Run PHP inside WP, return stdout (stripped)."""
     r = _wp(["eval", php], url=url, timeout=90)
     return r.stdout.strip()
+
+
+def _php_available():
+    return shutil.which("php") is not None and os.path.exists(_PLUGIN)
+
+
+def _eval_plugin(php):
+    """Run PHP against the plugin source in THIS checkout, no container.
+
+    The container serves the plugin from a Docker volume, not a bind
+    mount of this repo, so `wp eval` tests whatever copy was last
+    deployed — fine for the sweep engine, useless for verifying a change
+    that has not shipped yet. Everything below the sweep is pure PHP:
+    the file's only load-time dependencies are the ABSPATH guard and
+    add_action/add_filter, so three stubs make it loadable directly and
+    the helpers under test can be called for real.
+    """
+    boot = (
+        "<?php\n"
+        "define('ABSPATH', sys_get_temp_dir() . '/');\n"
+        "function add_action() {}\n"
+        "function add_filter() {}\n"
+        "function apply_filters($tag, $value) { return $value; }\n"
+        "require %s;\n" % json.dumps(_PLUGIN)
+    )
+    with tempfile.NamedTemporaryFile("w", suffix=".php", delete=False) as fh:
+        fh.write(boot + php)
+        path = fh.name
+    try:
+        r = subprocess.run(["php", path], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            raise AssertionError("php failed: %s%s" % (r.stdout, r.stderr))
+        return r.stdout.strip()
+    finally:
+        os.unlink(path)
 
 
 @unittest.skipUnless(_docker_available(), "requires running onionpress-wordpress container")
