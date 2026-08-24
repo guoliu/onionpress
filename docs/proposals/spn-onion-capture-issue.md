@@ -1,14 +1,25 @@
-# DRAFT — issue for the Internet Archive: SPN stopped capturing embeds over .onion at the end of June
+# Issue for the Internet Archive: SPN captures .onion pages without their embeds
 
-> Status: draft, not filed. Standalone so the OnionPress PR series does not have to carry it. Written for readers who built Save Page Now — it states only what I measured, not how SPN is supposed to work. Measurements 2026-08-24, from a live OnionPress site I operate.
+> Filed as [internetarchive/wayback#303](https://github.com/internetarchive/wayback/issues/303) on 2026-08-24. Measurements from a live OnionPress site I operate. This file is the source of truth for the issue body — edit here, then `gh issue edit 303 --repo internetarchive/wayback --body-file <this file>` minus the title line and this note.
 
 **Title: Save Page Now captures .onion pages without their embeds — regression dated to end of June 2026**
 
-## What I think you do not know
+I publish a static site through [OnionPress](https://onionpress.org), a Tor publishing stack that serves a site from the author's own machine over a `.onion`. When that machine goes offline, readers are redirected to the newest Save Page Now capture, so that capture is what they actually see. Right now they get the HTML with no CSS and no images.
 
-Onion captures have been document-only since roughly 2026-06-25. Before that they carried embeds at volume. I can date it on three onions that are not mine, one of which is yours, and I can add server-side observations from the origin being captured — which is the part nobody outside can normally supply.
+Everything below goes through the SPN2 API — `POST /save` with an `Authorization: LOW key:secret` header — submitted over Tor to the archive.org onion mirror (`archivep75mb…onion`), because the publishing host has no clearnet route. The same script and the same credential produce correct captures for clearnet targets, which is the control throughout.
 
-## The dating
+## What I see
+
+Over `.onion`, SPN returns a successful capture with nothing in it: `counters` comes back `{"outlinks":0,"embeds":0}`, with `http_status: 200` and `duration_sec` of 7–10s.
+
+I control the origin being captured, so I can also say what arrives there:
+
+- Eight captures of eight distinct URLs produced eight `GET`s and **zero `HEAD`s** in my access log. The docs say SPN does a HEAD on the target to decide between the headless browser and a plain GET.
+- Each capture is a single `GET` with a Chrome UA, answered `200`, never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts — all same-origin.
+- `capture_screenshot=1` on a **successful** onion capture returns no `screenshot` field. The same parameter on `www.debian.org` returns one.
+- The origin was up throughout, and answers a HEAD over Tor in 2.5s with `200 text/html`.
+
+## When it started
 
 Non-HTML captures per month in 2026, from CDX:
 
@@ -18,22 +29,9 @@ Non-HTML captures per month in 2026, from CDX:
 | `archivep75mb…onion` (yours) | 337 | 50 | 842 | 361 | 124 | — | **0** |
 | Facebook | 86 | 28 | 156 | 19 | 43 | — | **0** |
 
-July has **no captures at all** on any of the three, then August resumes HTML-only. `x-archive-src` on the pre-July records reads `spn2-…`, so these were SPN's captures rather than another crawler's.
+July has no captures at all on any of the three, then August resumes HTML-only. `x-archive-src` on the pre-July records reads `spn2-…`, so these were SPN's captures rather than another crawler's.
 
-## What I see from the origin
-
-I control the server being captured, so these are direct observations rather than inferences from the API:
-
-- **The HEAD never arrives.** Eight captures of eight distinct URLs produced eight `GET`s and zero `HEAD`s in my access log. The only HEADs present are my own `curl` probes.
-- **One request, nothing behind it.** Each capture is a single `GET` with a Chrome UA, answered `200`, never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts — all same-origin.
-- **The origin is healthy.** It answers a HEAD over Tor in 2.5s with `200 text/html`, and was up throughout.
-
-## What I see from the API
-
-- `counters` comes back `{"outlinks":0,"embeds":0}` with `http_status: 200` and `duration_sec` of 7–10s. Fast, successful, empty.
-- `capture_screenshot=1` on a **successful** onion capture returns no `screenshot` field. The same parameter on `www.debian.org` returns one.
-
-## The isolation
+## Isolating it
 
 One script, one credential, identical parameters, submission carried over Tor in every arm. Only the target's transport differs:
 
@@ -44,26 +42,24 @@ One script, one credential, identical parameters, submission carried over Tor in
 | `duckduckgo.com` | 158 | 63 |
 | DuckDuckGo's `.onion` | **0** | **0** |
 
-The DuckDuckGo pair is the one that matters — not my site, my server, or my generator.
+The DuckDuckGo pair is the one that matters: it rules out my site, my server, and my generator.
 
-I also ruled out `js_behavior_timeout`, since I had been sending `0`: values `0`, omitted, and `30` give identical results on each transport.
+I also ruled out `js_behavior_timeout`, since I had been sending `0` — values `0`, omitted, and `30` give identical results on each transport.
 
-## My reading, which you are better placed to confirm or reject
+## What I think is happening
 
-No headless browser runs for onion targets. Embeds and outlinks are browser-derived and both zero; a screenshot needs a render and none is produced on a success; and the HEAD that selects browser-versus-GET is absent because there is no selection happening. A plain-GET path taken unconditionally over `.onion` accounts for all four observations with one cause.
+No headless browser runs for onion targets. Embeds and outlinks are browser-derived and both zero; a screenshot needs a render and none is produced on a success; and the HEAD that selects browser-versus-GET never arrives. A plain-GET path taken unconditionally over `.onion` accounts for all four observations with one cause.
 
-I cannot see inside SPN, so that is an inference. If onion embed capture was disabled deliberately, I would much rather know that than have this treated as a bug.
+I can't see inside SPN, so that is an inference. If onion embed capture was disabled deliberately, I would rather know that than have this treated as a bug.
 
-## A second restriction, which blocks the obvious workaround
+## Per-asset submission is refused too
 
-Direct per-asset submission works on clearnet — `https://www.debian.org/debhome.css` and a `.png` beside it both captured on request. Over `.onion` the same submissions return `error:no-captures` without ever reaching my server.
+Submitting assets directly works on clearnet — `https://www.debian.org/debhome.css` and a `.png` beside it both captured on request. Over `.onion` the same submissions return `error:no-captures` without ever reaching my server.
 
-The discriminator looks like the file extension, not the response: my `/feed/`, serving `application/rss+xml` from an extensionless URL, captures and replays with its correct content type, while `.css` and `.jpg` on that same host in the same run are refused unread.
+The discriminator looks like the file extension rather than the response: my `/feed/`, serving `application/rss+xml` from an extensionless URL, captures and replays with the correct content type, while `.css` and `.jpg` on that same host in the same run are refused unread.
 
-## If you try to reproduce this
+## If you reproduce this
 
-Roughly a quarter of my onion submissions return `error:gateway-timeout` — ordinary circuit failure. My own first screenshot run failed that way in *both* arms and looked like a browser-related error until a no-screenshot control run alongside it showed otherwise. A single onion result proves nothing here; retry until you get a non-timeout verdict.
+About a quarter of my onion submissions return `error:gateway-timeout` — ordinary circuit failure. My own first screenshot run failed that way in *both* arms and looked like browser-related evidence until a no-screenshot control run alongside it showed otherwise. A single onion result proves nothing here; retry until you get a non-timeout verdict.
 
-## Why I care
-
-An OnionPress site is served from someone's laptop and goes offline routinely; OnionHeaven answers by redirecting readers to the newest Wayback capture. That fallback is the feature. Today it delivers an unstyled page with no images. I have a way around it — publish to a clearnet domain and archive that instead — so this is not urgent for me. But onion capture visibly worked two months ago, and losing it quietly seemed worth telling you about.
+Happy to run further tests from the origin side, which is the part that is normally hard to observe. And if Save Page Now isn't tracked in this repo, point me at the right place and I'll move this.
