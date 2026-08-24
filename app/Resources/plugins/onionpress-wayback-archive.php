@@ -489,14 +489,33 @@ function onionpress_wayback_submit_parallel( array $urls ) {
     // that one really would reduce every capture to a bare HTML GET.
     //
     // So when a capture of ours replays without its images, the cause is
-    // not on this line. Our onion answers in 3-20s when it answers at
-    // all, against SPN's documented "Network connection timeout = 10s"
-    // per resource and "Max web page capture time = 50s ... Partial
-    // success may still be recorded if sufficient content has been
-    // captured". A slow onion spends that budget on the HTML and the
-    // embeds are what falls off. Raising js_behavior_timeout does not buy
-    // those back — it spends the same scarce 50s on scroll/hover events
-    // we have no use for, and a trial with behaviors enabled returned 504.
+    // not on this line — and it is not our origin being slow either. That
+    // "a slow onion spends SPN's 50s budget on the HTML and the embeds
+    // fall off" account stood in this comment for a while and it is
+    // WRONG. Measured 2026-08-24 with four submissions:
+    //
+    //     ddg onion,  plain (no params)      success  9.3s   resources=0
+    //     clearnet,   WITH these speed params success 10.7s  resources=24
+    //     clearnet,   plain (control)         success 15.7s  resources=24
+    //     our onion,  plain (no params)       success  7.4s  resources=0
+    //
+    // Read the middle two rows first: they are the control on this very
+    // line. skip_first_archive/js_behavior_timeout do NOT suppress embed
+    // capture — clearnet pulls 24 subresources with them set, the same 24
+    // it pulls without. The paragraph above about force_get is correct.
+    //
+    // Then read the outer two: over .onion SPN reports **zero** resources,
+    // for DuckDuckGo exactly as for us, at a duration that shows it did
+    // not run out of anything. Budget is not the mechanism. SPN's Tor path
+    // simply fetches the HTML and stops; its clearnet path runs the
+    // headless browser and follows embeds. Nothing we send, and nothing
+    // about our server, moves that.
+    //
+    // (Our origin is also not slow: 2.4-7.5s TTFB over Tor against DDG's
+    // 2.3-4.1s, serving 43KB against their 172KB. The intermittent
+    // error:gateway-timeout on our submissions is transient circuit luck,
+    // not a property of this site — the same URL succeeded in 7.4s.)
+    //
     // What we do instead is refuse to call such a capture complete: see
     // onionpress_wayback_resources_state() and the bare-captures counter.
     //
@@ -526,11 +545,20 @@ function onionpress_wayback_submit_parallel( array $urls ) {
     // Treat bare captures over onion as SPN's steady state, not as a
     // defect of this site to be chased.
     //
-    // Caveat on scope: the above is measured for *directly submitted*
-    // asset URLs. Whether page-embed capture fails for the same reason
-    // is not established — the "slow onion spends the 50s budget"
-    // account above may still be the right one there. Both belong in
-    // the report to IA.
+    // (An earlier version of this comment said it was "not established"
+    // whether page-embed capture fails for the same reason. It is now:
+    // resources=0 over onion vs 24 over clearnet, above. Direct submission
+    // and embed capture fail together, and they fail for everyone.)
+    //
+    // Net effect on this site: over .onion the Wayback Machine can only
+    // ever hold our HTML. Confirmed against the index — 138 text/html and
+    // 17 rss+xml records for our onion, and zero of anything else. Pages
+    // replay whole (see the no-gzip work in multisite.py) but unstyled,
+    // because the stylesheet they reference was never captured. No
+    // parameter, retry, or resubmission strategy on our side changes
+    // that; only a different capture pipeline would. Belongs in the
+    // report to IA — and OnionPress is IA's own project, so that report
+    // has somewhere to go.
     //
     // Dropped `if_not_archived_within=1h` — on retries after a failed
     // onion crawl, SPN was returning the cached error instead of re-
