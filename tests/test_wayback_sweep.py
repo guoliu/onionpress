@@ -148,7 +148,10 @@ def _eval_plugin(php):
         fh.write(boot + php)
         path = fh.name
     try:
-        r = subprocess.run(["php", path], capture_output=True, text=True, timeout=30)
+        # -n skips php.ini: with xdebug loaded, var_dump output grows a
+        # file:line prefix and every exact-match assertion below breaks on
+        # any runner that ships xdebug (GitHub CI does).
+        r = subprocess.run(["php", "-n", path], capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
             raise AssertionError("php failed: %s%s" % (r.stdout, r.stderr))
         return r.stdout.strip()
