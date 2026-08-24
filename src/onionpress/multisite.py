@@ -81,6 +81,51 @@ HTACCESS_BODY = """\
 Header set Referrer-Policy "no-referrer"
 </IfModule>
 
+# Send pages uncompressed, so the Wayback Machine stores whole ones.
+#
+# Every capture of this site was arriving truncated -- not slightly, but to
+# roughly a sixth of the page, cut off mid-tag with no closing </html>. The
+# archived byte count was not merely close to the gzipped size, it equalled
+# it exactly, on every page measured (2026-08-24: home 7487/43658,
+# /illuminated-books/ 6628/34734, /blogroll/ 20318/55856, /follow/
+# 24342/111821 -- archived/identity, with gzipped == archived in all four).
+# Something on the capture side reads the *decompressed* body while counting
+# against Content-Length, which mod_deflate sets to the *compressed* length
+# whenever it can buffer the whole response. Both halves are legal HTTP; the
+# combination loses the document.
+#
+# The damage runs past the missing bytes. A truncated page ends before most
+# of its markup, so the crawler's own embed discovery walks a stub and finds
+# almost nothing -- which is why captures come back embeds=0 and replay
+# without stylesheet or images, and why moss's inline low-res placeholders
+# render at their full width/height attributes as giant blurred boxes.
+#
+# Proven by controlled experiment, not inference: with `SetEnv no-gzip 1` on
+# a single path, /writings/the-mental-traveller/ captured at 13537 bytes --
+# its exact identity length, closing </html> -- while the rest of the site,
+# still gzipped, went on truncating. Reverted immediately after.
+#
+# So pages go out uncompressed and static assets keep their gzip. The cost
+# is small and lands where there is room for it: a page is a few tens of KB
+# next to the hundreds of KB of imagery beside it, while CSS and JS -- the
+# files that compress best and are fetched on every page -- are untouched.
+# The pattern names the documents positively: a directory URL, an .html
+# file, the feed, a WordPress page routed through index.php.
+#
+# Listing the documents rather than excluding the assets is not a style
+# choice. SetEnvIf has no regex negation: its "!" attaches to the variable
+# being unset, never to the pattern, so a rule written "!\\.(css|js)$" is a
+# regex hunting for a literal "!" and quietly never fires. That exact form
+# was tried here first and shipped an inert rule -- the config parsed, the
+# server stayed up, the pages went on being gzipped and truncated.
+#
+# The feed is in the list on purpose. It is not an asset the archive picks
+# up in passing: the sweep submits /rss.xml by name, and 17 copies of it
+# are already stored, every one cut to its gzipped length like the pages.
+<IfModule mod_setenvif.c>
+SetEnvIf Request_URI "(/|\\.html?|\\.xml|\\.php)$" no-gzip=1
+</IfModule>
+
 # BEGIN WordPress Multisite
 RewriteEngine On
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
