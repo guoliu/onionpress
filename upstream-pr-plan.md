@@ -213,7 +213,7 @@ posting, so they get the same review as code.
 |---|---|
 | Phase 0 hygiene/rename/hardening | done, merged to main, pushed (2026-08-16) |
 | Wave 2 refresh of all four branches | done, verified, pushed (2026-08-24) |
-| Outreach drafts (umbrella + 3 proposals + PR bodies) | drafted in `docs/proposals/`, not posted |
+| Outreach drafts (umbrella + PR bodies) | drafted in `docs/proposals/`, not posted; the 3 reserve proposal issues were dropped 2026-08-24 (not doing them now) |
 | `upstream/fixes` (PR1, 9 commits) | refreshed, verified, pushed |
 | `upstream/tor-bridges` (PR2, 5 commits) | wave-1 build stands (healing rework deferred to wave 3) |
 | `upstream/static-first-serving` (PR3, 3 commits) | refreshed, verified, pushed |

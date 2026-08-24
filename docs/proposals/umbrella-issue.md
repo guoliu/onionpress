@@ -4,7 +4,6 @@
 > 1. Open the 4 PRs first, so the issue can cite real numbers.
 > 2. Post this issue with recording 1 embedded at top (≤10 MB embeds inline; otherwise a guoliu/onionpress release asset + GIF teaser in the issue), then edit each PR body to link the issue.
 > 3. Guo sends the personal note to Brewster: ~3 sentences + the update recording + ONE link (this issue). Offer a call/live demo.
-> 4. The three collaboration proposals stay a PARAGRAPH here; open them as individual issues only when he engages with that thread. Drafts live in this directory, ready.
 
 ---
 
@@ -44,4 +43,3 @@ These are improvements that will make it much more usable to a broader set of us
 
 - **A DNS domain alongside the onion name and onion address**: sites published through OnionPress get a `.onion`; most authors also need a `example.com` their readers can reach, just like the dual life onionpress.org itself has. In moss, a user can purchase and set up a domain in a few clicks. The archive fallback could serve that domain too: archiving under the clearnet URL is also what makes Wayback captures complete (Save Page Now over `.onion` misses embeds — we measured), and the domain's edge can redirect to the newest snapshot when the home machine is offline — the same role the takeover already plays for the onion, applied at the DNS layer.
 - **WordPress as an optional component**: a publisher that already runs its own local server (moss serves the site it previews) needs only the tor container — the static server and receiver matter when the site should keep serving after the publisher app quits, or live on another machine. Making WordPress optional would cut most of the container download (WordPress 257 MB + MariaDB 100 MB compressed, vs 86 MB for the tor image) and most of the 2 GB VM it is sized for, while keeping today's full stack the default.
-- **Wayback behind the GFW**: web.archive.org itself is blocked there, so the archive fallback link fails for exactly the readers the bridges work serves. Readers on Tor can use the Archive's own onion mirror; the open question is everyone else — mirror read endpoints, distributed WACZ/WARC exports, or a fallback page listing every route.
