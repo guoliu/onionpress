@@ -1,6 +1,6 @@
 services:
   tor:
-    image: ghcr.io/guoliu/onionpress-tor:latest@sha256:a83d6c475dfdb1df93e738d2ae9c5007b44e3350862e95d1cf0cacb523d5a986
+    image: ghcr.io/guoliu/onionpress-tor:latest@sha256:f2f963c12d6586f3cb01d710603d975e4272ddb7782193c2c1cc7911762cf049
     container_name: onionpress-tor
     logging:
       driver: json-file
@@ -132,7 +132,7 @@ services:
     restart: unless-stopped
 
   onionheaven:
-    image: ${ONIONHEAVEN_IMAGE:-ghcr.io/guoliu/onionpress-tor:latest@sha256:a83d6c475dfdb1df93e738d2ae9c5007b44e3350862e95d1cf0cacb523d5a986}
+    image: ${ONIONHEAVEN_IMAGE:-ghcr.io/guoliu/onionpress-tor:latest@sha256:f2f963c12d6586f3cb01d710603d975e4272ddb7782193c2c1cc7911762cf049}
     container_name: onionheaven
     logging:
       driver: json-file
