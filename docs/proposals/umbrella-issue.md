@@ -44,12 +44,10 @@ These are improvements that will make it much more usable to a broader set of us
 - **A DNS domain alongside the onion name and onion address**: sites published through OnionPress get a `.onion`; most authors also need a `example.com` their readers can reach, just like the dual life onionpress.org itself has. In moss, a user can purchase and set up a domain in a few clicks. The archive fallback could serve that domain too: archiving under the clearnet URL also sidesteps the current gaps in Save Page Now's `.onion` capture path (see the note below), and the domain's edge can redirect to the newest snapshot when the home machine is offline — the same role the takeover already plays for the onion, applied at the DNS layer.
 - **WordPress as an optional component**: a publisher that already runs its own local server (moss serves the site it previews) needs only the tor container — the static server and receiver matter when the site should keep serving after the publisher app quits, or live on another machine. Making WordPress optional would cut most of the container download (WordPress 257 MB + MariaDB 100 MB compressed, vs 86 MB for the tor image) and most of the 2 GB VM it is sized for, while keeping today's full stack the default.
 
-## One thing we found in Save Page Now, since the archive fallback depends on it
+## One issue with Save Page Now found in the process
 
 An OnionPress site that goes offline falls back to its Wayback snapshot, so how well Save Page Now captures a `.onion` decides what readers actually see. Right now they see the page unstyled: the HTML is archived, and none of the CSS or images are.
 
 Over `.onion`, SPN fetches the document and discovers nothing inside it — `embeds` and `outlinks` both come back `0` where the same site on clearnet gives 24 and 29, submitted by the same script with the same parameters in the same minute. It is not our site: DuckDuckGo's onion behaves identically, and non-HTML capture on three well-known onions stopped in the same month. Our best reading is that the headless browser is not running for onion targets.
 
-Filed separately as #__ so this issue does not have to carry it — that one has the isolation, the month-by-month CDX figures, and reproduction steps.
-
-It is not urgent for us: we can route the fallback through a clearnet domain, and that is a better answer anyway. But onion capture visibly worked two months ago, so it seemed worth reporting.
+Filed separately as #__. Onion capture visibly worked two months ago, so it seemed worth reporting.
