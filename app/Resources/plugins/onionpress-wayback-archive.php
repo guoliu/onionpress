@@ -499,10 +499,48 @@ function onionpress_wayback_submit_parallel( array $urls ) {
     // we have no use for, and a trial with behaviors enabled returned 504.
     // What we do instead is refuse to call such a capture complete: see
     // onionpress_wayback_resources_state() and the bare-captures counter.
+    //
+    // Do NOT "fix" this by submitting the assets as their own URLs. That
+    // was measured on 2026-08-24 and it does not work over .onion — for
+    // anyone, not just us. Submitting four URLs in one window gave:
+    //
+    //     our  HTML  -> error:gateway-timeout
+    //     our  CSS   -> error:no-captures ("unreachable")
+    //     DDG  HTML  -> SUCCESS in 20s (ts 20260824095713)
+    //     DDG  CSS   -> error:no-captures ("unreachable")
+    //
+    // DuckDuckGo's onion is fast, healthy, and its HTML captured on the
+    // spot in that same window, so this is not Tor congestion and not a
+    // slow origin — and it is not something about our server, which was
+    // the standing suspicion. A directly-submitted non-HTML URL over
+    // .onion fails, full stop. It is not the file either: 29-byte
+    // byte-identical files on our own onion capture as .html and fail as
+    // .css, so the discriminator is the extension/Content-Type, not size
+    // or reachability.
+    //
+    // The Wayback Machine does hold onion CSS/JS — DDG's onion has 82
+    // text/css and 230 x-javascript records, IA's own onion 225 JS, dated
+    // 202602-202606. Those did not come through Save Page Now; CDX
+    // redacts the WARC `filename` field, so the pipeline can't be read
+    // off the index, but whatever captured them is not the API we have.
+    // Treat bare captures over onion as SPN's steady state, not as a
+    // defect of this site to be chased.
+    //
+    // Caveat on scope: the above is measured for *directly submitted*
+    // asset URLs. Whether page-embed capture fails for the same reason
+    // is not established — the "slow onion spends the 50s budget"
+    // account above may still be the right one there. Both belong in
+    // the report to IA.
+    //
     // Dropped `if_not_archived_within=1h` — on retries after a failed
     // onion crawl, SPN was returning the cached error instead of re-
     // trying with a fresh circuit. Relying on SPN's built-in default
-    // (45 min) lets genuinely failed URLs retry sooner on new circuits.
+    // lets genuinely failed URLs retry sooner on new circuits.
+    //
+    // That default is NOT the 45 minutes this comment used to assert. A
+    // resubmission 75 minutes later came back with the *identical* job
+    // id, so the real dedup window is >=75 min. Anything that reasons
+    // about "it will retry in 45 minutes" is wrong.
     //
     // Chunk the URL list so we never fire more than OP_WB_CONCURRENT_MAX
     // handles at once — Tor SOCKS saturates above that point and every
