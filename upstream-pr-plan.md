@@ -36,10 +36,42 @@ branches and PRs move.
 
 | PR | Branch | Content | Depends on |
 |---|---|---|---|
-| 1 | `upstream/fixes` | port-offset resolution fix, EXIT-trap fix, auto-login `redirect_to` sanitization (+bypass tests), reachability tri-state + status.json fields, VM_MEMORY=2 | — |
+| 1 | `upstream/fixes` | port-offset resolution fix, EXIT-trap fix, auto-login `redirect_to` sanitization (+bypass tests), reachability tri-state + status.json fields, VM_MEMORY=2, onionname clearnet-redirect fixes, stalled-plugin-download timeout, pytest `src/` path | — |
 | 2 | `upstream/tor-bridges` | tor image PT binaries (Dockerfile), entrypoint bridge/PT/proxy config (C Tor + Arti), compose env passthrough, config-template docs, watchdog serving-ladder, bootstrap diagnostic tool, wayback sweep hardening | — |
-| 3 | `upstream/static-first-serving` | Apache static-first conf + runtime inject/repair (`install/ensure_static_site_conf`), `--apache-conf-dir` on all provision paths | — |
-| 4 | `upstream/static-publish` | renamed receiver mu-plugin, `docs/static-publish-protocol.md`, `onionname` CLI, `--managed`, start-idempotency | PR 3 |
+| 3 | `upstream/static-first-serving` | Apache static-first conf + runtime inject/repair (`install/ensure_static_site_conf`), `--apache-conf-dir` on all provision paths, uncompressed static serving (Wayback capture fidelity) | — |
+| 4 | `upstream/static-publish` | renamed receiver mu-plugin, `docs/static-publish-protocol.md`, `onionname` CLI, `--managed`, start-idempotency, wayback coverage of static generations + honest SPN reporting, MenubarApp revival on scripted restart | PRs 2 + 3 |
+
+## Wave 2 refresh (2026-08-24)
+
+Snapshot `347d05d3`. The post-freeze upstreamable work on main was folded into the
+open export branches before posting; branch tips after the refresh:
+`upstream/fixes` = `3c0e5adb` (9 commits, 586 tests green),
+`upstream/tor-bridges` = `ffe2ba1d` (unchanged from wave 1),
+`upstream/static-first-serving` = `34b11d6c` (3 commits, 591 green),
+`upstream/static-publish` = `147ec46a` (PR2 + PR3 + 9 own commits, 666 green).
+
+Placement decisions, for the next extractor:
+
+- **PR 4 now stacks on PR 2 as well as PR 3.** The wayback static-coverage work
+  (`b8acd8aa` and its cluster) textually builds on PR 2's wayback hardening and
+  functionally needs PR 4's receiver, so it rides in PR 4 and the branch carries
+  PR 2 + PR 3 underneath. The PR body says so.
+- **The MenubarApp-revival trio (`6399cd88` `26d1b9ca` `01161fc5`) lives in PR 4,
+  not PR 1** — it depends on `receiver_answering_port` and the start-idempotency
+  arm, both PR 4 content. Fork-only quiet-launch code (`7b75afa1` `3a09b31a`
+  `63d53c6f`) was excised at pick time; test classes belonging to other PRs'
+  fixes were dropped from the picked test file.
+- **The end-to-end-healing rework (#6: e2e verdicts, `rebuild-hs`, host
+  supervisor, receiver 2.1) is wave 3, not a refresh.** `204c940b` alone is
+  inseparable from it (conflicts on `e2e_verdict` machinery PR 2 doesn't have),
+  so PR 2 ships its wave-1 serving-ladder watchdog and the export branches stay
+  at receiver 2.0. Do not bump `receiver_version` on an export branch.
+- **`feat/wayback-moss-coverage` (18 commits, peer branch) stays unmerged.** Its
+  wayback half was superseded by main's generation-id-keyed rework (`8846fafa`);
+  its infra half (takeover-worker images, bootstrap percentage — see the
+  joint-cherry-pick note in CLAUDE.md) is fork-side and conflicts with main.
+  Reconcile it fork-side in its own pass; nothing upstream waits on it.
+- CLAUDE.md hunks are never picked onto export branches — fork memory.
 
 ## Never upstream (any PR)
 
@@ -180,10 +212,13 @@ posting, so they get the same review as code.
 | Item | State |
 |---|---|
 | Phase 0 hygiene/rename/hardening | done, merged to main, pushed (2026-08-16) |
-| Outreach drafts (umbrella + 3 proposals) | drafted in `docs/proposals/`, not posted |
-| `upstream/fixes` (PR1, 5 commits) | built, verified, pushed |
-| `upstream/tor-bridges` (PR2, 5 commits) | built, verified, pushed |
-| `upstream/static-first-serving` (PR3, 2 commits) | built, verified, pushed |
-| `upstream/static-publish` (PR4, 4 commits, stacks on PR3) | built, verified, pushed |
+| Wave 2 refresh of all four branches | done, verified, pushed (2026-08-24) |
+| Outreach drafts (umbrella + 3 proposals + PR bodies) | drafted in `docs/proposals/`, not posted |
+| `upstream/fixes` (PR1, 9 commits) | refreshed, verified, pushed |
+| `upstream/tor-bridges` (PR2, 5 commits) | wave-1 build stands (healing rework deferred to wave 3) |
+| `upstream/static-first-serving` (PR3, 3 commits) | refreshed, verified, pushed |
+| `upstream/static-publish` (PR4, 9 commits, stacks on PR2+PR3) | refreshed, verified, pushed |
+| Demo recordings (update flow + first publish with name modal) | recorded by Guo (2026-08-24) |
 | moss plugin rename follow-up | done, committed in moss repo |
-| Opening PRs/issues on brewsterkahle/onionpress | not started — needs user sign-off before posting |
+| moss `stack-manifest.json` re-pin to a post-rename fork release | open — needs a fork release + moss build |
+| Opening PRs/issues on brewsterkahle/onionpress | drafts ready — needs user sign-off before posting |

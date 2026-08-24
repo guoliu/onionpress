@@ -11,7 +11,9 @@ Today, publishing a static site through OnionPress means running the full
 stack — WordPress + MariaDB included — even when the publisher never uses
 WordPress. The pieces a static publish actually needs are the tor container,
 the static receiver, and the Apache serving rules; on a 2 GB VM, WordPress
-and MariaDB are most of the idle footprint.
+and MariaDB are most of the idle footprint, and they are a large share of
+the download too — a serving-only profile would make the first install
+meaningfully smaller for publishers who bring their own site.
 
 Questions we'd like your read on before proposing anything concrete:
 
