@@ -61,7 +61,11 @@ It is not specific to our site or our generator — DuckDuckGo's own onion behav
 
 First, each capture arrives as a **single** request with a Chrome user-agent, gets a normal `200`, and is never followed by a request for any of the page's 19 images, its stylesheet, or its 4 scripts. So it looks like discovery rather than reachability — the document comes through fine.
 
-Second, the documented behaviour is that "SPN2 does a HTTP HEAD on the target URL to decide whether to use a headless browser or a simple HTTP GET request". **We never see that HEAD.** Across eight captures of eight distinct URLs, our log holds eight `GET`s and zero `HEAD`s from SPN (the only HEADs present are our own `curl` probes). If the decision step is being skipped over `.onion` and the plain-GET path taken unconditionally, that would explain the zero embeds, the zero outlinks and the single request together. We cannot see your side, so we offer that as a hypothesis rather than a diagnosis.
+Second, the documented behaviour is that "SPN2 does a HTTP HEAD on the target URL to decide whether to use a headless browser or a simple HTTP GET request". **We never see that HEAD.** Across eight captures of eight distinct URLs, our log holds eight `GET`s and zero `HEAD`s from SPN (the only HEADs present are our own `curl` probes).
+
+That points at one cause for all of it: over `.onion` the headless browser never runs. A third test agrees. Asking for `capture_screenshot=1` on a **successful** onion capture returns no `screenshot` field at all, while the same parameter on `www.debian.org` returns one, together with its 24 embeds and 29 outlinks. A screenshot requires something to render the page, so its absence on a success — not a timeout — says nothing rendered. Embeds and outlinks are both browser-derived, which is why they are zero; and the HEAD is only worth doing if there is a choice to be made.
+
+Worth noting for anyone reproducing this: roughly a quarter of our onion submissions come back `error:gateway-timeout`, and the first run of that screenshot test failed that way in **both** arms, which briefly looked like a browser-related error and was not. Any single onion result here needs a retry before it means anything.
 
 It also looks like a regression rather than a limitation, and it is not just us. Non-HTML captures per month in 2026, from CDX, on three onions none of which are ours:
 
