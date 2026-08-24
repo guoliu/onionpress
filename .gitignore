@@ -2,6 +2,10 @@
 build/*.dmg
 build/temp.dmg
 build/*.deb
+# Hand-made backups of a build output. `build/*.dmg` does not match
+# `onionpress-aug18.dmg.bak`, so a 167 MB artifact sat untracked and
+# unignored, one `git add -A` away from being committed.
+build/*.bak
 
 # macOS
 .DS_Store
