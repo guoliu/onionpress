@@ -85,6 +85,9 @@ LIMA_VERSION="2.0.3"
 DOCKER_VERSION="27.5.1"
 DOCKER_COMPOSE_VERSION="v2.40.2"  # >=2.40.2 closes CVE-2025-62725 (HIGH)
 MKP224O_VERSION="v1.7.0"
+# Used only if the Homebrew libsodium's version has no matching source
+# release (see the x86_64 cross-compile below, which prefers to match it).
+LIBSODIUM_FALLBACK_VERSION="1.0.20"
 
 # GitHub anonymously throttles release-asset downloads to ~30 KB/s, which
 # turns the bundling step below into a 20+ minute affair. Authenticated
@@ -220,10 +223,20 @@ if cache_get "mkp224o-${MKP224O_VERSION}-universal" "$TEMP_BIN_DIR/mkp224o"; the
     echo "  mkp224o ${MKP224O_VERSION}: cache hit"
 elif command -v git >/dev/null 2>&1; then
     echo "  Building mkp224o ${MKP224O_VERSION} for custom onion address prefixes..."
-    # Run the entire mkp224o build in a subshell so any failure is isolated
-    # and does not abort the DMG build via set -e in the outer shell.
+    # Compile chatter is noise until something breaks, so it goes to a log and
+    # only the tail is printed, on failure.
+    MKP_LOG="$TEMP_BIN_DIR/mkp224o-build.log"
+    : > "$MKP_LOG"
+    # The subshell must NOT be the left-hand side of `||`. In an AND-OR list the
+    # shell ignores `set -e` for every command but the last, so a `set -e` inside
+    # would be inert and each failing step would simply fall through to the next.
+    # That is how v2.4.110-moss.2 came to build an arm64-only mkp224o: the
+    # libsodium download failed, nothing stopped, and the build printed ✓ for
+    # three steps that had not happened. Run it standalone and read $? instead.
+    set +e
     (
     set -e
+    trap 'echo "  ERROR: mkp224o build failed. Last 40 lines of $MKP_LOG:" >&2; tail -40 "$MKP_LOG" >&2' ERR
     # Clone mkp224o at the pinned tag — shallow clone, saves most of the
     # git fetch cost relative to a full clone of the master history.
     git clone --branch "${MKP224O_VERSION}" --depth 1 \
@@ -243,11 +256,23 @@ elif command -v git >/dev/null 2>&1; then
     echo "  Building libsodium for x86_64 cross-compilation..."
     SODIUM_X86_DIR="$TEMP_BIN_DIR/libsodium-x86_64"
     SODIUM_X86_SRC="$TEMP_BIN_DIR/libsodium-src"
-    SODIUM_VERSION=$(pkg-config --modversion libsodium 2>/dev/null || echo "1.0.20")
-    curl -L -o "$TEMP_BIN_DIR/libsodium.tar.gz" \
-      "https://download.libsodium.org/libsodium/releases/libsodium-${SODIUM_VERSION}.tar.gz" 2>/dev/null || \
-    curl -L -o "$TEMP_BIN_DIR/libsodium.tar.gz" \
-      "https://download.libsodium.org/libsodium/releases/libsodium-1.0.20-stable.tar.gz" 2>/dev/null
+    # Match the Homebrew libsodium the arm64 slice links against so both slices
+    # carry the same version, falling back to a known-good release if that
+    # version was never published as a source tarball.
+    SODIUM_VERSION=$(pkg-config --modversion libsodium 2>/dev/null || echo "$LIBSODIUM_FALLBACK_VERSION")
+    # Source comes from the GitHub release, not download.libsodium.org: that
+    # host stalls often enough to break CI (2026-08-24 — both attempts returned
+    # nothing, the tarball was never written, and the x86_64 slice silently
+    # disappeared). GitHub serves the identical tarballs and lets this reuse the
+    # retry-hardened GH_DL options every other pinned download here already has.
+    sodium_url() { echo "https://github.com/jedisct1/libsodium/releases/download/$1-RELEASE/libsodium-$1.tar.gz"; }
+    curl -fL "${GH_DL[@]}" -o "$TEMP_BIN_DIR/libsodium.tar.gz" \
+      "$(sodium_url "$SODIUM_VERSION")" >>"$MKP_LOG" 2>&1 || \
+    curl -fL "${GH_DL[@]}" -o "$TEMP_BIN_DIR/libsodium.tar.gz" \
+      "$(sodium_url "$LIBSODIUM_FALLBACK_VERSION")" >>"$MKP_LOG" 2>&1
+    # -f stops an HTML error body being saved as a tarball; gzip -t catches the
+    # truncated transfer that -f cannot see.
+    gzip -t "$TEMP_BIN_DIR/libsodium.tar.gz"
     mkdir -p "$SODIUM_X86_SRC"
     tar xzf "$TEMP_BIN_DIR/libsodium.tar.gz" -C "$SODIUM_X86_SRC" --strip-components=1
     cd "$SODIUM_X86_SRC"
@@ -255,14 +280,18 @@ elif command -v git >/dev/null 2>&1; then
         --disable-shared --enable-static \
         CC="clang -arch x86_64" \
         CFLAGS="-arch x86_64 -mmacosx-version-min=13.0" \
-        LDFLAGS="-arch x86_64" > /dev/null 2>&1
-    make -j"$(sysctl -n hw.ncpu)" > /dev/null 2>&1
-    make install > /dev/null 2>&1
-    echo "  ✓ libsodium x86_64 built"
+        LDFLAGS="-arch x86_64" >>"$MKP_LOG" 2>&1
+    make -j"$(sysctl -n hw.ncpu)" >>"$MKP_LOG" 2>&1
+    make install >>"$MKP_LOG" 2>&1
+    # Every ✓ below reports a file that exists and an arch that was checked.
+    # The previous version printed them unconditionally, which is what made a
+    # failed cross-compile look like a successful one.
+    [ -f "$SODIUM_X86_DIR/lib/libsodium.a" ] || { echo "  ERROR: libsodium.a missing after build" >&2; exit 1; }
+    echo "  ✓ libsodium x86_64 built ($(lipo -archs "$SODIUM_X86_DIR/lib/libsodium.a"))"
 
     # Run autogen once in the mkp224o source
     cd "$TEMP_BIN_DIR/mkp224o-src"
-    ./autogen.sh > /dev/null 2>&1
+    ./autogen.sh >>"$MKP_LOG" 2>&1
 
     # Build mkp224o for arm64 (native)
     echo "  Building mkp224o for arm64..."
@@ -272,10 +301,11 @@ elif command -v git >/dev/null 2>&1; then
     cd "$MKP_ARM64_DIR"
     CFLAGS="-arch arm64 -mmacosx-version-min=13.0 -I$SODIUM_PREFIX/include" \
         LDFLAGS="-arch arm64" \
-        ./configure --host=aarch64-apple-darwin --enable-ref10 > /dev/null 2>&1
+        ./configure --host=aarch64-apple-darwin --enable-ref10 >>"$MKP_LOG" 2>&1
     sed -i.bak "s| -lsodium| ${SODIUM_PREFIX}/lib/libsodium.a|g" GNUmakefile
-    make -j"$(sysctl -n hw.ncpu)" > /dev/null 2>&1
-    echo "  ✓ mkp224o arm64 built"
+    make -j"$(sysctl -n hw.ncpu)" >>"$MKP_LOG" 2>&1
+    [ -f "$MKP_ARM64_DIR/mkp224o" ] || { echo "  ERROR: mkp224o arm64 binary missing after make" >&2; exit 1; }
+    echo "  ✓ mkp224o arm64 built ($(lipo -archs "$MKP_ARM64_DIR/mkp224o"))"
 
     # Build mkp224o for x86_64 (cross-compile)
     echo "  Building mkp224o for x86_64..."
@@ -286,34 +316,36 @@ elif command -v git >/dev/null 2>&1; then
     CFLAGS="-arch x86_64 -mmacosx-version-min=13.0 -I$SODIUM_X86_DIR/include" \
         LDFLAGS="-arch x86_64" \
         CC="clang -arch x86_64" \
-        ./configure --host=x86_64-apple-darwin --enable-ref10 > /dev/null 2>&1
+        ./configure --host=x86_64-apple-darwin --enable-ref10 >>"$MKP_LOG" 2>&1
     sed -i.bak "s| -lsodium| ${SODIUM_X86_DIR}/lib/libsodium.a|g" GNUmakefile
-    make -j"$(sysctl -n hw.ncpu)" > /dev/null 2>&1
-    echo "  ✓ mkp224o x86_64 built"
+    make -j"$(sysctl -n hw.ncpu)" >>"$MKP_LOG" 2>&1
+    [ -f "$MKP_X86_DIR/mkp224o" ] || { echo "  ERROR: mkp224o x86_64 binary missing after make" >&2; exit 1; }
+    echo "  ✓ mkp224o x86_64 built ($(lipo -archs "$MKP_X86_DIR/mkp224o"))"
 
-    # Create universal binary
-    if [ -f "$MKP_ARM64_DIR/mkp224o" ] && [ -f "$MKP_X86_DIR/mkp224o" ]; then
-        lipo -create \
-            "$MKP_ARM64_DIR/mkp224o" \
-            "$MKP_X86_DIR/mkp224o" \
-            -output "$TEMP_BIN_DIR/mkp224o"
-        echo "  ✓ mkp224o universal binary created ($(lipo -archs "$TEMP_BIN_DIR/mkp224o"))"
+    # Create universal binary. Both slices are asserted present above, so there
+    # is deliberately no arm64-only fallback here any more: it existed to keep
+    # the build going, and all it actually did was hand the bundle a binary that
+    # cannot run on Intel — caught by the release arch gate if you were lucky,
+    # and shipped if you were not.
+    lipo -create \
+        "$MKP_ARM64_DIR/mkp224o" \
+        "$MKP_X86_DIR/mkp224o" \
+        -output "$TEMP_BIN_DIR/mkp224o"
+    echo "  ✓ mkp224o universal binary created ($(lipo -archs "$TEMP_BIN_DIR/mkp224o"))"
 
-        # Verify static linking
-        if otool -L "$TEMP_BIN_DIR/mkp224o" | grep -q libsodium; then
-            echo "  ⚠️  WARNING: mkp224o still has dynamic libsodium dependency"
-        else
-            echo "  ✓ mkp224o statically linked (no libsodium dependency)"
-        fi
-        cache_put "mkp224o-${MKP224O_VERSION}-universal" "$TEMP_BIN_DIR/mkp224o"
-    elif [ -f "$MKP_ARM64_DIR/mkp224o" ]; then
-        echo "  WARNING: x86_64 build failed, using arm64-only mkp224o"
-        cp "$MKP_ARM64_DIR/mkp224o" "$TEMP_BIN_DIR/mkp224o"
+    # Verify static linking
+    if otool -L "$TEMP_BIN_DIR/mkp224o" | grep -q libsodium; then
+        echo "  ⚠️  WARNING: mkp224o still has dynamic libsodium dependency"
     else
-        echo "  WARNING: mkp224o build failed" >&2
-        exit 1
+        echo "  ✓ mkp224o statically linked (no libsodium dependency)"
     fi
-    ) || echo "  WARNING: mkp224o build failed — vanity address generation unavailable"
+    cache_put "mkp224o-${MKP224O_VERSION}-universal" "$TEMP_BIN_DIR/mkp224o"
+    )
+    mkp224o_rc=$?
+    set -e
+    if [ "$mkp224o_rc" -ne 0 ]; then
+        echo "  WARNING: mkp224o build failed — vanity address generation unavailable" >&2
+    fi
 
     cd "$TEMP_BIN_DIR"
 else
