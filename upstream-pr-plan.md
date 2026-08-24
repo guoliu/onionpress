@@ -221,4 +221,6 @@ posting, so they get the same review as code.
 | Demo recordings (update flow + first publish with name modal) | recorded by Guo (2026-08-24) |
 | moss plugin rename follow-up | done, committed in moss repo |
 | moss `stack-manifest.json` re-pin to a post-rename fork release | open — needs a fork release + moss build |
-| Opening PRs/issues on brewsterkahle/onionpress | drafts ready — needs user sign-off before posting |
+| Opening PRs/issues on brewsterkahle/onionpress | POSTED 2026-08-24: PRs #273 (fixes) #274 (tor-bridges) #275 (static-first) #276 (static-publish), umbrella issue #277; SPN capture bug filed as internetarchive/wayback#303 |
+| Recordings embedded in #277 | pending — Guo drag-drops the two videos into the placeholder lines |
+| Personal note to Brewster | pending — Guo sends after recordings are in |
