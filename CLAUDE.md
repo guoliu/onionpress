@@ -4,10 +4,11 @@
 - **This file (`CLAUDE.md`) is the project memory.** Store all new memories and notes here so they travel with the repo.
 
 ## Upstreaming is in progress (2026-08-16 →)
-- **Read `upstream-pr-plan.md` before** touching receiver naming, tor image pins, the
+- **Read the upstreaming plan before** touching receiver naming, tor image pins, the
   self-updater URLs, or opening any PR to `brewsterkahle/onionpress`. It records the
   locked decisions (4 stacked PRs, rename-in-fork-first, hardening scope) and holds the
-  live status table — keep that table current.
+  live status table — keep that table current. It is **not in this repo**: this fork is
+  public and read by upstream, so coordination notes live privately (see `.gitignore`).
 - `upstream/*` branches are frozen cherry-pick branches based on upstream main
   (`94ce1a363`). **Never merge fork main into them**; later fork work is the next wave.
 
