@@ -61,6 +61,30 @@ function onionpress_directory_request_host() {
 }
 
 /**
+ * The trimmed request path, or null when this request isn't ours to
+ * handle at all: wrong host, or not a GET. Both hooks below opened with
+ * the same OnionHome-host check, GET-only check, parse_url() and trim() —
+ * this is the one place that logic lives, so the two cannot drift apart.
+ */
+function onionpress_directory_request_path() {
+    if ( ! onionpress_directory_is_onionhome_host( $_SERVER['HTTP_HOST'] ?? '' ) ) {
+        return null;
+    }
+
+    // Only respond to bare GETs. POSTs, admin, XML-RPC, etc. pass through.
+    if ( ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) !== 'GET' ) {
+        return null;
+    }
+
+    $uri  = $_SERVER['REQUEST_URI'] ?? '/';
+    $path = parse_url( $uri, PHP_URL_PATH );
+    if ( ! is_string( $path ) ) {
+        return null;
+    }
+    return trim( $path, '/' );
+}
+
+/**
  * True when this request came in over the clearnet bridge (onionpress.org
  * via the Cloudflare tunnel) rather than over Tor.
  */
@@ -70,22 +94,6 @@ function onionpress_directory_request_is_clearnet() {
         $host === ONIONPRESS_CLEARNET_HOST
         || $host === 'www.' . ONIONPRESS_CLEARNET_HOST
     );
-}
-
-/**
- * Path segments that are WordPress's, never an onionname.
- *
- * The first segment of any URL is now treated as a candidate name (deep
- * paths are carried through to the target), so the handful of segments
- * that unambiguously belong to this site are excluded before we ask the
- * registry about them.
- */
-function onionpress_directory_is_reserved_segment( $segment ) {
-    $reserved = array(
-        'wp-admin', 'wp-json', 'wp-content', 'wp-includes', 'wp-login',
-        'feed', 'follow', 'xmlrpc.php',
-    );
-    return in_array( strtolower( (string) $segment ), $reserved, true );
 }
 
 /**
@@ -230,10 +238,12 @@ function onionpress_directory_handle_follow_by_name( $name ) {
 }
 
 /**
- * Bare-NAME redirect: if the incoming path is a single segment that could
- * be an onionname AND the registry has an entry AND the target is some
- * OTHER .onion, 302 to that site. If the target is this instance, fall
- * through so WP multisite serves the local blog.
+ * Called for a URL WordPress itself would 404 on. NAME is the first path
+ * segment; anything after it is carried through as $suffix. If the
+ * registry has an entry for NAME and it points at some OTHER .onion, 302
+ * to that site (its root + $suffix). If NAME resolves to this instance,
+ * or the registry has no entry at all, fall through and leave WordPress's
+ * own 404 in place.
  */
 function onionpress_directory_handle_name_lookup( $name, $suffix = '' ) {
     // Cheap client-side filter — avoids a curl hop for obviously-invalid
@@ -302,26 +312,15 @@ function onionpress_directory_handle_name_lookup( $name, $suffix = '' ) {
 }
 
 /**
- * Dispatch on every request. Runs AFTER WP has parsed the URL into
- * query vars, which is early enough to intercept before the template
- * layer picks up the blog-path.
+ * Dispatch the /follow?name=NAME entry point on every request. Runs AFTER
+ * WP has parsed the URL into query vars, which is early enough to
+ * intercept before the template layer picks up the blog-path.
  */
 add_action( 'parse_request', function ( $wp ) {
-    if ( ! onionpress_directory_is_onionhome_host( $_SERVER['HTTP_HOST'] ?? '' ) ) {
+    $path = onionpress_directory_request_path();
+    if ( null === $path ) {
         return;
     }
-
-    // Only respond to bare GETs. POSTs, admin, XML-RPC, etc. pass through.
-    if ( ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) !== 'GET' ) {
-        return;
-    }
-
-    $uri  = $_SERVER['REQUEST_URI'] ?? '/';
-    $path = parse_url( $uri, PHP_URL_PATH );
-    if ( ! is_string( $path ) ) {
-        return;
-    }
-    $path = trim( $path, '/' );
 
     // /follow?name=NAME — the named-follow entry point linked by theme headers.
     if ( $path === 'follow' && ! empty( $_GET['name'] ) ) {
@@ -330,24 +329,46 @@ add_action( 'parse_request', function ( $wp ) {
         );
         return;
     }
-
-    // /NAME[/REST] — the first segment is the candidate onionname and
-    // everything after it is carried through to the target unchanged, so
-    // /alice/posts/hello lands on /posts/hello rather than 404ing. Deep
-    // paths used to be skipped entirely, which meant a name could only ever
-    // link to a homepage.
-    //
-    // An unregistered first segment (every ordinary WordPress URL) falls
-    // through untouched: lookup returns null. The pre-filter in
-    // handle_name_lookup keeps that from costing a registry hop for most of
-    // them, and this dispatcher only runs on the OnionHome hosts, where the
-    // registry is a local container call rather than a trip over Tor.
-    if ( $path !== '' ) {
-        $parts  = explode( '/', $path, 2 );
-        $segment = $parts[0];
-        $suffix  = isset( $parts[1] ) ? $parts[1] : '';
-        if ( ! onionpress_directory_is_reserved_segment( $segment ) ) {
-            onionpress_directory_handle_name_lookup( $segment, $suffix );
-        }
-    }
 } );
+
+/**
+ * Dispatch /NAME[/REST] only once WordPress has failed to find anything to
+ * serve at that URL. A URL this site can serve is never looked up, so
+ * WordPress's own routes — whatever their bases, including custom
+ * taxonomies, child pages and sitemaps — cost nothing here and cannot be
+ * shadowed by a registered name sharing their first segment. Only a URL
+ * that would otherwise 404 is offered to the registry, with the path
+ * after the name carried through unchanged so /alice/posts/hello still
+ * lands on /posts/hello.
+ *
+ * Consequence worth knowing: an existing local page, post or user archive
+ * always wins over a remote name sharing its slug; a renamed post's old
+ * slug does not, since wp_old_slug_redirect runs after us at priority 10.
+ *
+ * Relies on pretty permalinks — with plain permalinks WordPress never
+ * 404s an unrecognized path, so is_404() never fires and no name would
+ * resolve. OnionHome, the only host this runs on, uses pretty permalinks.
+ *
+ * Priority 1 so this runs before core's redirect_canonical (priority 10),
+ * which otherwise guesses a nearby post for the 404 first and this code
+ * never sees it.
+ */
+add_action( 'template_redirect', function () {
+    $path = onionpress_directory_request_path();
+    if ( null === $path ) {
+        return;
+    }
+
+    if ( ! is_404() ) {
+        return;
+    }
+
+    if ( $path === '' ) {
+        return;
+    }
+
+    $parts   = explode( '/', $path, 2 );
+    $segment = $parts[0];
+    $suffix  = isset( $parts[1] ) ? $parts[1] : '';
+    onionpress_directory_handle_name_lookup( $segment, $suffix );
+}, 1 );
