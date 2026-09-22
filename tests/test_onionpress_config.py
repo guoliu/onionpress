@@ -307,6 +307,12 @@ class TestPortDetection(unittest.TestCase):
         self.assertEqual(pc.offset, 10000)
         self.assertEqual(pc.wp_port, 18080)
 
+    def test_from_offset_derives_all_three_ports(self):
+        pc = PortConfig.from_offset(10000)
+        self.assertEqual(
+            pc, PortConfig(offset=10000, wp_port=18080, socks_port=19050, proxy_port=19077)
+        )
+
     def test_foreign_holder_still_bumps_offset(self):
         """detect_port_offset() is a bind-based allocator: it can't tell
         "someone else holds this port" from "we do" — it only knows

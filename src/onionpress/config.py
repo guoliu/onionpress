@@ -279,6 +279,17 @@ class PortConfig:
     socks_port: int
     proxy_port: int
 
+    @classmethod
+    def from_offset(cls, offset: int) -> "PortConfig":
+        """Build the port triple from an offset — the one place 8080/9050/9077
+        get added to it, so the three ports can't drift apart across callers."""
+        return cls(
+            offset=offset,
+            wp_port=8080 + offset,
+            socks_port=9050 + offset,
+            proxy_port=9077 + offset,
+        )
+
 
 def stop_stale_colima(colima_bin: str, colima_home: str, pid_file: str) -> None:
     """Stop an orphaned Colima VM left over from a crash or force-quit.
@@ -339,23 +350,16 @@ def detect_port_offset() -> PortConfig:
     """
     offset = 0
     while True:
-        ports = (8080 + offset, 9050 + offset, 9077 + offset)
-        if max(ports) > 65535:
-            offset = 0  # fall back to default
-            break
+        pc = PortConfig.from_offset(offset)
+        if max(pc.wp_port, pc.socks_port, pc.proxy_port) > 65535:
+            return PortConfig.from_offset(0)  # fall back to default
         all_free = True
-        for p in ports:
+        for p in (pc.wp_port, pc.socks_port, pc.proxy_port):
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             except OSError:
                 # Can't even create a socket — give up
-                offset = 0
-                return PortConfig(
-                    offset=offset,
-                    wp_port=8080 + offset,
-                    socks_port=9050 + offset,
-                    proxy_port=9077 + offset,
-                )
+                return PortConfig.from_offset(0)
             try:
                 s.bind(("127.0.0.1", p))
             except OSError:
@@ -364,15 +368,8 @@ def detect_port_offset() -> PortConfig:
                 break
             s.close()
         if all_free:
-            break
+            return pc
         offset += 10000
-
-    return PortConfig(
-        offset=offset,
-        wp_port=8080 + offset,
-        socks_port=9050 + offset,
-        proxy_port=9077 + offset,
-    )
 
 
 def resolve_port_offset() -> PortConfig:
@@ -393,12 +390,6 @@ def resolve_port_offset() -> PortConfig:
     detect_port_offset() directly instead.
     """
     running_port = launcher_ops.get_running_wp_port()
-    if running_port is not None and running_port >= 8080:
-        offset = running_port - 8080
-        return PortConfig(
-            offset=offset,
-            wp_port=running_port,
-            socks_port=9050 + offset,
-            proxy_port=9077 + offset,
-        )
+    if running_port is not None:
+        return PortConfig.from_offset(running_port - 8080)
     return detect_port_offset()
