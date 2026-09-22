@@ -344,7 +344,15 @@ def get_running_wp_port(container: str = "onionpress-wordpress") -> Optional[int
     if ":" not in first_line:
         return None
     port_str = first_line.rsplit(":", 1)[-1]
-    return int(port_str) if port_str.isdigit() else None
+    if not port_str.isdigit():
+        return None
+    port = int(port_str)
+    # Offsets are 8080 + k*10000, so nothing we allocate is ever below
+    # 8080 — a lower published port belongs to something else entirely
+    # (e.g. a hand-edited port mapping).
+    if port < 8080:
+        return None
+    return port
 
 
 def get_admin_password(data_dir: str) -> Optional[str]:

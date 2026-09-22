@@ -2789,12 +2789,12 @@ class OnionPressApp(rumps.App):
         running_port = launcher_ops.get_running_wp_port()
         if running_port is None or running_port == self.wp_port:
             return
-        offset = running_port - 8080
+        pc = op_config.PortConfig.from_offset(running_port - 8080)
         self.log(f"Port resync: was {self.wp_port}, running stack is on {running_port}")
-        self.wp_port = running_port
-        self.socks_port = 9050 + offset
-        self.proxy_port = 9077 + offset
-        os.environ["ONIONPRESS_PORT_OFFSET"] = str(offset)
+        self.wp_port = pc.wp_port
+        self.socks_port = pc.socks_port
+        self.proxy_port = pc.proxy_port
+        os.environ["ONIONPRESS_PORT_OFFSET"] = str(pc.offset)
         os.environ["ONIONPRESS_WP_PORT"] = str(self.wp_port)
         os.environ["ONIONPRESS_SOCKS_PORT"] = str(self.socks_port)
         os.environ["ONIONPRESS_PROXY_PORT"] = str(self.proxy_port)
