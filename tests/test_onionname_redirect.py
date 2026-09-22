@@ -171,32 +171,36 @@ class TestNameResolvesToTheOnionRoot(unittest.TestCase):
         )
 
 
-class TestReservedSegmentsAreNotNames(unittest.TestCase):
-    """Treating the first segment as a candidate name means WordPress's own
-    paths would otherwise be looked up in the registry."""
+class TestNameLookupIsGatedOn404(unittest.TestCase):
+    """The /NAME[/REST] dispatch only runs once WordPress itself has failed
+    to find anything at the URL — otherwise every WordPress route (however
+    it's based: categories, authors, search, child pages, sitemaps) would
+    cost a registry round-trip, and a registered name could shadow the
+    site's own page at the same slug."""
 
     def setUp(self):
         self.src = _read("app/Resources/plugins/onionpress-directory.php")
 
-    def test_wordpress_paths_are_excluded(self):
-        for segment in ("wp-admin", "wp-json", "wp-login", "feed"):
-            self.assertIn(
-                f"'{segment}'", self.src,
-                f"{segment} must be reserved, not treated as an onionname.",
-            )
-
-    def test_the_dispatcher_consults_the_reserved_list(self):
-        dispatch = self.src.index("add_action( 'parse_request'")
+    def test_the_dispatcher_is_gated_on_404(self):
+        dispatch = self.src.index("add_action( 'template_redirect'")
+        body = self.src[dispatch:]
         self.assertIn(
-            "onionpress_directory_is_reserved_segment", self.src[dispatch:],
-            "The dispatcher must skip reserved segments before looking a "
-            "name up.",
+            "is_404()", body,
+            "The name dispatch must only run once WordPress has already "
+            "failed to serve the URL, or it would shadow the site's own "
+            "routes.",
+        )
+        self.assertIn("onionpress_directory_handle_name_lookup", body)
+        self.assertTrue(
+            body.rstrip().endswith("}, 1 );"),
+            "Must run at priority 1, before core's redirect_canonical "
+            "(priority 10), or a guessed nearby post wins the 404 first.",
         )
 
     def test_deep_paths_reach_the_name_handler(self):
         """The old dispatcher skipped anything containing a slash, so deep
         paths got no redirect at all."""
-        dispatch = self.src.index("add_action( 'parse_request'")
+        dispatch = self.src.index("add_action( 'template_redirect'")
         body = self.src[dispatch:]
         self.assertNotIn(
             "strpos( $path, '/' ) === false", body,
