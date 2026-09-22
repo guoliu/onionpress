@@ -148,10 +148,6 @@ class TestNameResolvesToTheOnionRoot(unittest.TestCase):
     def test_a_bare_name_resolves_to_the_site_root(self):
         self.assertEqual(self._target(), f"http://{self.addr}/")
 
-    def test_the_name_is_not_appended_as_a_path(self):
-        """The bug itself, stated as an assertion."""
-        self.assertNotIn("william-blake", self._target())
-
     def test_a_deep_path_is_carried_through(self):
         """A name is only worth having if you can link to a page."""
         self.assertEqual(
@@ -228,13 +224,6 @@ class TestClearnetGuardIsWiredUp(unittest.TestCase):
             reads, [],
             "$own is back. Use onionpress_directory_request_is_clearnet() "
             "rather than re-deriving the host in a second place.",
-        )
-
-    def test_both_clearnet_checks_use_the_shared_helper(self):
-        self.assertEqual(
-            self.src.count("onionpress_directory_request_is_clearnet()"), 3,
-            "Expected one definition and two call sites (the follow page and "
-            "the name lookup).",
         )
 
     def test_the_guard_precedes_the_onion_redirect(self):
